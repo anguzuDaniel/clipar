@@ -2,7 +2,7 @@
 # Optimized for video processing with FFmpeg
 
 # Stage 1: Dependencies
-FROM node:18-slim AS deps
+FROM node:20-slim AS deps
 WORKDIR /app
 
 # Install system dependencies
@@ -17,7 +17,7 @@ COPY package*.json ./
 RUN npm ci
 
 # Stage 2: Builder
-FROM node:18-slim AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
 
 # Install system dependencies
@@ -34,7 +34,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
 # Stage 3: Runner
-FROM node:18-slim AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 
 # Install runtime dependencies
