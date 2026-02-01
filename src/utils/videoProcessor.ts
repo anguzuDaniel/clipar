@@ -1,7 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
 import fs from 'fs';
-import { CONFIG } from './config';
+import { CONFIG } from '../lib/config';
 
 if (CONFIG.FFMPEG_PATH) {
     ffmpeg.setFfmpegPath(CONFIG.FFMPEG_PATH);
@@ -16,6 +16,26 @@ export interface ProcessingOptions {
     captionText?: string;
 }
 
+/**
+ * Splits text into lines of maximum characters to fit video frame width.
+ */
+function wrapText(text: string, maxCharsPerLine: number = 25): string {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    words.forEach(word => {
+        if ((currentLine + word).length <= maxCharsPerLine) {
+            currentLine += (currentLine ? ' ' : '') + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    });
+    if (currentLine) lines.push(currentLine);
+    return lines.join('\n');
+}
+
 export async function processClip(options: ProcessingOptions): Promise<string> {
     const { inputPath, outputPath, start, duration, aspectRatio, captionText } = options;
 
@@ -23,21 +43,16 @@ export async function processClip(options: ProcessingOptions): Promise<string> {
         fs.mkdirSync(CONFIG.OUTPUT_DIR, { recursive: true });
     }
 
+    const fontPath = path.join(process.cwd(), 'public/fonts/Montserrat-Bold.ttf').replace(/\\/g, '/');
+
     return new Promise((resolve, reject) => {
         let command = ffmpeg(inputPath)
             .setStartTime(start)
             .setDuration(duration);
 
-        // Vertical crop (9:16)
-        // For a 16:9 video, we want to crop the center 9/16 width
-        // crop=w:h:x:y
-        // if input is 1920x1080 (16:9)
-        // target height is 1080, target width is 1080 * (9/16) = 607.5 -> 608
-        // x = (1920 - 608) / 2 = 656
-        // Formula: crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0
-
         let videoFilters = [];
 
+        // 1. Vertical crop (9:16)
         if (aspectRatio === '9:16') {
             videoFilters.push({
                 filter: 'crop',
@@ -45,25 +60,31 @@ export async function processClip(options: ProcessingOptions): Promise<string> {
             });
         }
 
+        // 2. Advanced Stylized Captions
         if (captionText) {
-            // Very basic captioning using drawtext
-            // This requires FFmpeg to be built with libfreetype
-            // Since we are using ffmpeg-static, it usually has it.
-            // We'll place it at the bottom middle.
-            // We need to escape special characters in captionText.
-            const escapedCaption = captionText.replace(/'/g, "'\\''").replace(/:/g, '\\:');
+            const wrappedText = wrapText(captionText.toUpperCase(), 30);
+            // Escape special characters for FFmpeg
+            const escapedText = wrappedText
+                .replace(/'/g, "'\\''")
+                .replace(/:/g, '\\:')
+                .replace(/,/g, '\\,');
 
             videoFilters.push({
                 filter: 'drawtext',
                 options: {
-                    text: escapedCaption,
-                    fontcolor: 'white',
-                    fontsize: 48, // Adjust based on resolution
-                    box: 1,
-                    boxcolor: 'black@0.5',
-                    boxborderw: 10,
-                    x: '(w-text_w)/2',
-                    y: 'h-th-100', // 100px from bottom
+                    text: escapedText,
+                    fontfile: fontPath,
+                    fontcolor: '#FFFF00', // Yellow
+                    fontsize: 48,
+                    borderw: 3,           // Bold outline
+                    bordercolor: 'black',
+                    shadowcolor: 'black@0.6',
+                    shadowx: 3,
+                    shadowy: 3,
+                    x: '(w-text_w)/2',    // Center horizontally
+                    y: 'h*0.7',           // Lower-middle third
+                    fix_bounds: 1,        // Stay within frame
+                    line_spacing: 10
                 }
             });
         }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { downloadYouTubeVideo } from '@/lib/youtube';
 import { analyzeVideoWithGemini } from '@/lib/gemini';
-import { processClip } from '@/lib/video';
+import { processClip } from '@/utils/videoProcessor';
 import path from 'path';
 import fs from 'fs';
 import { CONFIG } from '@/lib/config';

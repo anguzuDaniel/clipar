@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface AdBannerProps {
     dataAdSlot: string;
@@ -22,8 +22,10 @@ export default function AdBanner({
     className = '',
 }: AdBannerProps) {
     const adInited = useRef(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        setIsMounted(true);
         if (typeof window !== 'undefined' && !adInited.current) {
             try {
                 (window.adsbygoogle = window.adsbygoogle || []).push({});
@@ -36,7 +38,7 @@ export default function AdBanner({
 
     const clientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
-    if (!clientId) return null;
+    if (!clientId || !isMounted) return null;
 
     return (
         <div className={`overflow-hidden ${className}`}>
