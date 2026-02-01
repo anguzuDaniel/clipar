@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from 'fs';
 
@@ -46,21 +46,31 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
 
     console.log("\nVideo is ready. Analyzing...");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const model = genAI.getGenerativeModel({
+        model: "gemini-flash-latest",
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: SchemaType.ARRAY,
+                items: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        start: { type: SchemaType.NUMBER, description: "Start time in seconds" },
+                        end: { type: SchemaType.NUMBER, description: "End time in seconds" },
+                        reason: { type: SchemaType.STRING },
+                        transcription: { type: SchemaType.STRING }
+                    },
+                    required: ["start", "end", "reason", "transcription"]
+                }
+            }
+        }
+    });
 
     const prompt = `
     Analyze this video for social media (TikTok, Reels, Shorts).
     Identify 3-5 viral or high-interest segments.
-    For each segment, provide:
-    1. Start and end timestamps in seconds.
-    2. A brief reason why it's viral.
-    3. A transcription of the audio for captions.
-    
-    Format the output as a JSON array of objects with keys: "start", "end", "reason", "transcription".
-    Example:
-    [
-      {"start": 10, "end": 25, "reason": "Funny punchline", "transcription": "So I told him, that's not a cat, that's my wife!"}
-    ]
+    For each segment, provide the start and end timestamps in seconds (as numbers), 
+    a brief reason why it's viral, and a transcription of the audio.
   `;
 
     const result = await model.generateContent([
@@ -76,17 +86,48 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
     const responseText = result.response.text();
     console.log("Gemini Response:", responseText);
 
-    // Clean up the response text (sometimes it includes markdown code blocks)
-    const jsonString = responseText.replace(/```json\n?|\n?```/g, "").trim();
-
     try {
-        const highlights: VideoHighlight[] = JSON.parse(jsonString);
-        return highlights;
+        // With responseSchema, the output should already be valid JSON
+        let highlights: any[] = JSON.parse(responseText);
+
+        // Robust mapping to ensure types are correct
+        const processedHighlights: VideoHighlight[] = highlights.map(h => ({
+            start: typeof h.start === 'string' ? parseTimestamp(h.start) : Number(h.start),
+            end: typeof h.end === 'string' ? parseTimestamp(h.end) : Number(h.end),
+            reason: String(h.reason),
+            transcription: String(h.transcription)
+        }));
+
+        return processedHighlights;
     } catch (error) {
         console.error("Failed to parse Gemini JSON:", error);
-        throw new Error("Invalid response format from AI");
+
+        // Fallback: Try a more aggressive cleanup if traditional JSON.parse fails
+        try {
+            const jsonString = responseText.replace(/```json\n?|\n?```/g, "").trim();
+            const highlights: any[] = JSON.parse(jsonString);
+            return highlights.map(h => ({
+                start: typeof h.start === 'string' ? parseTimestamp(h.start) : Number(h.start),
+                end: typeof h.end === 'string' ? parseTimestamp(h.end) : Number(h.end),
+                reason: String(h.reason),
+                transcription: String(h.transcription)
+            }));
+        } catch (innerError) {
+            throw new Error("Invalid response format from AI");
+        }
     } finally {
         // Optionally delete the file from Gemini
         // await fileManager.deleteFile(name);
     }
+}
+
+/**
+ * Parses timestamps in formats like "4:45", "01:04:45" or "285" into total seconds.
+ */
+function parseTimestamp(timestamp: string): number {
+    const parts = timestamp.split(':').map(Number);
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    return Number(timestamp) || 0;
 }
