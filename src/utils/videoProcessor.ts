@@ -16,26 +16,6 @@ export interface ProcessingOptions {
     captionText?: string;
 }
 
-/**
- * Splits text into lines of maximum characters to fit video frame width.
- */
-function wrapText(text: string, maxCharsPerLine: number = 25): string {
-    const words = text.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-
-    words.forEach(word => {
-        if ((currentLine + word).length <= maxCharsPerLine) {
-            currentLine += (currentLine ? ' ' : '') + word;
-        } else {
-            lines.push(currentLine);
-            currentLine = word;
-        }
-    });
-    if (currentLine) lines.push(currentLine);
-    return lines.join('\n');
-}
-
 export async function processClip(options: ProcessingOptions): Promise<string> {
     const { inputPath, outputPath, start, duration, aspectRatio, captionText } = options;
 
@@ -43,67 +23,110 @@ export async function processClip(options: ProcessingOptions): Promise<string> {
         fs.mkdirSync(CONFIG.OUTPUT_DIR, { recursive: true });
     }
 
-    const fontPath = path.join(process.cwd(), 'public/fonts/Montserrat-Bold.ttf').replace(/\\/g, '/');
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Ensure temporary directory exists for audio and subtitle files
+            if (!fs.existsSync(CONFIG.TEMP_DIR)) {
+                fs.mkdirSync(CONFIG.TEMP_DIR, { recursive: true });
+            }
 
-    return new Promise((resolve, reject) => {
-        let command = ffmpeg(inputPath)
-            .setStartTime(start)
-            .setDuration(duration);
+            let command = ffmpeg(inputPath)
+                .setStartTime(start)
+                .setDuration(duration);
 
-        let videoFilters = [];
+            let videoFilters = [];
 
-        // 1. Vertical crop (9:16)
-        if (aspectRatio === '9:16') {
-            videoFilters.push({
-                filter: 'crop',
-                options: 'ih*9/16:ih:(iw-ih*9/16)/2:0'
-            });
-        }
+            // 1. Vertical crop (9:16)
+            if (aspectRatio === '9:16') {
+                videoFilters.push({
+                    filter: 'crop',
+                    options: 'ih*9/16:ih:(iw-ih*9/16)/2:0'
+                });
+            }
 
-        // 2. Advanced Stylized Captions
-        if (captionText) {
-            const wrappedText = wrapText(captionText.toUpperCase(), 30);
-            // Escape special characters for FFmpeg
-            const escapedText = wrappedText
-                .replace(/'/g, "'\\''")
-                .replace(/:/g, '\\:')
-                .replace(/,/g, '\\,');
+            // 2. Timed Subtitles (if caption text provided)
+            let subtitlePath: string | null = null;
+            if (captionText) {
+                try {
+                    // Import utilities dynamically to avoid circular dependencies
+                    const { extractAudio, transcribeAudioWithTimestamps } = await import('./audioProcessor');
+                    const { createSRTFile } = await import('./subtitleGenerator');
 
-            videoFilters.push({
-                filter: 'drawtext',
-                options: {
-                    text: escapedText,
-                    fontfile: fontPath,
-                    fontcolor: '#FFFF00', // Yellow
-                    fontsize: 48,
-                    borderw: 3,           // Bold outline
-                    bordercolor: 'black',
-                    shadowcolor: 'black@0.6',
-                    shadowx: 3,
-                    shadowy: 3,
-                    x: '(w-text_w)/2',    // Center horizontally
-                    y: 'h*0.7',           // Lower-middle third
-                    fix_bounds: 1,        // Stay within frame
-                    line_spacing: 10
+                    // Extract audio from the clip
+                    const audioPath = path.join(CONFIG.TEMP_DIR, `audio_${Date.now()}.mp3`);
+                    await extractAudio(inputPath, audioPath);
+
+                    // Transcribe audio to get word-level timestamps
+                    const words = await transcribeAudioWithTimestamps(audioPath, duration);
+
+                    // Generate SRT subtitle file
+                    subtitlePath = path.join(CONFIG.TEMP_DIR, `subtitles_${Date.now()}.srt`);
+                    await createSRTFile(words, subtitlePath, 3); // 3 words per phrase
+
+                    // Clean up audio file
+                    if (fs.existsSync(audioPath)) {
+                        fs.unlinkSync(audioPath);
+                    }
+
+                    // Add subtitle filter with custom styling
+                    const escapedSubPath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
+                    videoFilters.push({
+                        filter: 'subtitles',
+                        options: {
+                            filename: escapedSubPath,
+                            force_style: 'FontName=Montserrat-Bold,FontSize=43,PrimaryColour=&H00FFFF,OutlineColour=&H000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=150'
+                        }
+                    });
+
+                    console.log('Subtitle file created:', subtitlePath);
+                } catch (error) {
+                    console.error('Subtitle generation error:', error);
+                    // Continue without subtitles if there's an error
                 }
-            });
-        }
+            }
 
-        if (videoFilters.length > 0) {
-            command.videoFilters(videoFilters);
-        }
+            if (videoFilters.length > 0) {
+                command.videoFilters(videoFilters);
+            }
 
-        command
-            .output(outputPath)
-            .on('start', (cmd: string) => console.log('FFmpeg started:', cmd))
-            .on('end', () => {
-                console.log('FFmpeg finished:', outputPath);
-                resolve(outputPath);
-            })
-            .on('error', (err: Error) => {
-                console.error('FFmpeg error:', err);
-                reject(err);
-            })
-            .run();
+            command
+                .output(outputPath)
+                .videoCodec('libx264')
+                .addOption('-preset', 'veryfast')
+                .addOption('-crf', '28')
+                .size('720x1280') // Normalize resolution for speed and social media format
+                .on('start', (cmd: string) => console.log('FFmpeg started:', cmd))
+                .on('end', () => {
+                    console.log('FFmpeg finished:', outputPath);
+
+                    // Cleanup subtitle file
+                    if (subtitlePath && fs.existsSync(subtitlePath)) {
+                        try {
+                            fs.unlinkSync(subtitlePath);
+                        } catch (e) {
+                            console.warn('Could not delete subtitle file:', e);
+                        }
+                    }
+
+                    resolve(outputPath);
+                })
+                .on('error', (err: Error) => {
+                    console.error('FFmpeg error:', err);
+
+                    // Cleanup subtitle file on error
+                    if (subtitlePath && fs.existsSync(subtitlePath)) {
+                        try {
+                            fs.unlinkSync(subtitlePath);
+                        } catch (e) {
+                            console.warn('Could not delete subtitle file:', e);
+                        }
+                    }
+
+                    reject(err);
+                })
+                .run();
+        } catch (error) {
+            reject(error);
+        }
     });
 }

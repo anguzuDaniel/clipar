@@ -17,13 +17,35 @@ export async function POST(req: NextRequest) {
         if (url) {
             inputPath = await downloadYouTubeVideo(url);
         } else if (file) {
-            // Save local file
+            // Backend Size Limit: 500MB
+            if (file.size > 500 * 1024 * 1024) {
+                return NextResponse.json({ error: 'File size exceeds 500MB limit' }, { status: 400 });
+            }
+
+            // Save local file with streaming to avoid memory issues
             if (!fs.existsSync(CONFIG.TEMP_DIR)) {
                 fs.mkdirSync(CONFIG.TEMP_DIR, { recursive: true });
             }
             inputPath = path.join(CONFIG.TEMP_DIR, `upload_${Date.now()}.mp4`);
-            const buffer = Buffer.from(await file.arrayBuffer());
-            fs.writeFileSync(inputPath, buffer);
+
+            const writeStream = fs.createWriteStream(inputPath);
+            const reader = file.stream().getReader();
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    writeStream.write(Buffer.from(value));
+                }
+            } finally {
+                writeStream.end();
+            }
+
+            // Wait for write stream to finish
+            await new Promise<void>((resolve, reject) => {
+                writeStream.on('finish', () => resolve());
+                writeStream.on('error', (err) => reject(err));
+            });
         } else {
             return NextResponse.json({ error: 'No video source provided' }, { status: 400 });
         }
@@ -31,31 +53,54 @@ export async function POST(req: NextRequest) {
         // Step 2: AI Analysis
         const highlights = await analyzeVideoWithGemini(inputPath);
 
-        // Step 3: Video Processing (Parallel)
-        const processedClips = await Promise.all(
-            highlights.map(async (highlight, index) => {
-                const outputFilename = `clip_${Date.now()}_${index}.mp4`;
-                const outputPath = path.join(CONFIG.OUTPUT_DIR, outputFilename);
+        // Filter out clips that are too short (minimum 20 seconds for social media)
+        const validHighlights = highlights.filter(h => {
+            const duration = h.end - h.start;
+            if (duration < 20) {
+                console.log(`Skipping short clip: ${duration}s (${h.start}-${h.end})`);
+                return false;
+            }
+            return true;
+        });
 
-                await processClip({
-                    inputPath,
-                    outputPath,
-                    start: highlight.start,
-                    duration: highlight.end - highlight.start,
-                    aspectRatio: '9:16',
-                    captionText: highlight.transcription,
-                });
+        if (validHighlights.length === 0) {
+            throw new Error('No valid clips found. The video segments identified were too short (minimum 20 seconds required).');
+        }
 
-                return {
-                    id: index,
-                    url: `/outputs/${outputFilename}`,
-                    reason: highlight.reason,
-                    transcription: highlight.transcription,
-                    start: highlight.start,
-                    end: highlight.end,
-                };
-            })
-        );
+        // Step 3: Video Processing (Sequential to avoid CPU saturation)
+        const processedClips = [];
+        for (let i = 0; i < validHighlights.length; i++) {
+            const highlight = validHighlights[i];
+            const outputFilename = `clip_${Date.now()}_${i}.mp4`;
+            const outputPath = path.join(CONFIG.OUTPUT_DIR, outputFilename);
+
+            await processClip({
+                inputPath,
+                outputPath,
+                start: highlight.start,
+                duration: highlight.end - highlight.start,
+                aspectRatio: '9:16',
+                captionText: highlight.transcription,
+            });
+
+            processedClips.push({
+                id: i,
+                url: `/outputs/${outputFilename}`,
+                reason: highlight.reason,
+                transcription: highlight.transcription,
+                start: highlight.start,
+                end: highlight.end,
+            });
+        }
+
+        // Cleanup input file after processing
+        if (inputPath && fs.existsSync(inputPath)) {
+            try {
+                fs.unlinkSync(inputPath);
+            } catch (cleanupErr) {
+                console.error('Cleanup Error:', cleanupErr);
+            }
+        }
 
         return NextResponse.json({ clips: processedClips });
     } catch (error: any) {

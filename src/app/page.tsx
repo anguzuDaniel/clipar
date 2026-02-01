@@ -15,6 +15,8 @@ interface Clip {
   end: number;
 }
 
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
 export default function Dashboard() {
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -26,6 +28,10 @@ export default function Dashboard() {
   const handleProcess = async () => {
     if (!url && !file) {
       setError('Please provide a YouTube URL or upload an MP4 file.');
+      return;
+    }
+    if (file && file.size > MAX_FILE_SIZE) {
+      setError('File size exceeds 500MB limit. Please upload a smaller video.');
       return;
     }
 
@@ -89,6 +95,7 @@ export default function Dashboard() {
                   type="text"
                   placeholder="Paste YouTube URL..."
                   className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm"
+                  suppressHydrationWarning
                   value={url}
                   onChange={(e) => {
                     setUrl(e.target.value);
@@ -121,10 +128,18 @@ export default function Dashboard() {
                   type="file"
                   className="hidden"
                   accept="video/mp4"
+                  suppressHydrationWarning
                   onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      setFile(e.target.files[0]);
+                    const selectedFile = e.target.files?.[0];
+                    if (selectedFile) {
+                      if (selectedFile.size > MAX_FILE_SIZE) {
+                        setError('File size exceeds 500MB limit.');
+                        setFile(null);
+                        return;
+                      }
+                      setFile(selectedFile);
                       setUrl('');
+                      setError('');
                     }
                   }}
                 />

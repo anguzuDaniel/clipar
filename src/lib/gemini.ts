@@ -24,30 +24,49 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
     }
 
     // Upload the file to Gemini File API
-    const uploadResponse = await fileManager.uploadFile(videoPath, {
-        mimeType: "video/mp4",
-        displayName: "Video for Clipping",
-    });
+    let uploadResponse;
+    try {
+        uploadResponse = await fileManager.uploadFile(videoPath, {
+            mimeType: "video/mp4",
+            displayName: "Video for Clipping",
+        });
+    } catch (error: any) {
+        console.error("Gemini Upload Error:", error);
+        const errorMessage = error.message || String(error);
+        if (errorMessage.includes("fetch failed")) {
+            throw new Error("Failed to upload video to Gemini. This may be due to a timeout with a large file or a network issue. Please try a smaller video or check your internet connection.");
+        }
+        if (errorMessage.includes("429") || errorMessage.includes("quota")) {
+            throw new Error("Gemini API quota exceeded. Please wait a moment or check your Google AI Studio billing/plan.");
+        }
+        throw new Error(`Failed to upload video: ${errorMessage}`);
+    }
 
     const name = uploadResponse.file.name;
     console.log(`Uploaded file ${name} to Gemini. Waiting for processing...`);
 
     // Wait for processing to complete
-    let file = await fileManager.getFile(name);
-    while (file.state === "PROCESSING") {
-        process.stdout.write(".");
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+    let file;
+    try {
         file = await fileManager.getFile(name);
+        while (file.state === "PROCESSING") {
+            process.stdout.write(".");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            file = await fileManager.getFile(name);
+        }
+    } catch (error: any) {
+        console.error("Gemini Processing Check Error:", error);
+        throw new Error(`Error checking video status: ${error.message}`);
     }
 
     if (file.state === "FAILED") {
-        throw new Error("Video processing failed in Gemini");
+        throw new Error("Video processing failed in Gemini. The video might be in an unsupported format or too long.");
     }
 
     console.log("\nVideo is ready. Analyzing...");
 
     const model = genAI.getGenerativeModel({
-        model: "gemini-flash-latest",
+        model: "gemini-2.0-flash",
         generationConfig: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -86,9 +105,16 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
 
     const prompt = `
     Analyze this video for social media (TikTok, Reels, Shorts).
-    Identify 3-5 viral or high-interest segments.
-    For each segment, provide the start and end timestamps in seconds (as numbers), 
-    a brief reason why it's viral, and a transcription of the audio.
+    Identify 3-5 viral or high-interest segments that are ENGAGING and COMPLETE.
+    
+    IMPORTANT: Each segment MUST be between 30-60 seconds long to be suitable for social media.
+    Do NOT select segments shorter than 30 seconds.
+    
+    For each segment, provide:
+    - start: The start timestamp in seconds (as a number)
+    - end: The end timestamp in seconds (as a number) - ensure end - start >= 30
+    - reason: A brief explanation of why this segment is viral-worthy
+    - transcription: A transcription of the key audio/dialogue in this segment
   `;
 
     const result = await model.generateContent([
@@ -108,6 +134,13 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
     } catch (e: any) {
         console.error("Gemini response was blocked:", e);
         const errorMessage = e.message || String(e);
+
+        // Check for token limit errors
+        if (errorMessage.includes("token count exceeds") || errorMessage.includes("1048576")) {
+            throw new Error("This video is too long to process. Please try a video under 45 minutes or use a shorter segment.");
+        }
+
+        // Check for content safety blocks
         if (errorMessage.includes("PROHIBITED_CONTENT") ||
             errorMessage.includes("SAFETY") ||
             errorMessage.includes("OTHER") ||
