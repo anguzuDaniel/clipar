@@ -1,7 +1,8 @@
+require('dotenv').config({ path: '.env.local' });
 const axios = require('axios');
 
 async function testApi() {
-    const apiKey = "AIzaSyDFO-luTOX6ehHQrPr3pAgRBqG1pMoMdAY";
+    const apiKey = process.env.GEMINI_API_KEY;
     const models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
 
     for (const model of models) {

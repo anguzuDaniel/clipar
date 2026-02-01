@@ -1,7 +1,8 @@
+require('dotenv').config({ path: '.env.local' });
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 async function listModels() {
-    const apiKey = "AIzaSyDFO-luTOX6ehHQrPr3pAgRBqG1pMoMdAY";
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         console.error("GEMINI_API_KEY is not set in .env.local");
         return;
