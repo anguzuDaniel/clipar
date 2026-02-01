@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Upload, Link as LinkIcon, Scissors, Check, Download, Loader2, Sparkles, Video } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import AdBanner from '@/components/AdBanner';
 
 interface Clip {
   id: number;
@@ -130,6 +131,12 @@ export default function Dashboard() {
               </label>
             </div>
 
+            <AdBanner
+              dataAdSlot="xxxxxxxxxx"
+              dataAdFormat="horizontal"
+              className="mt-6 rounded-xl border border-white/5 bg-white/5 p-2"
+            />
+
             <button
               onClick={handleProcess}
               disabled={isProcessing || (!url && !file)}
@@ -172,6 +179,12 @@ export default function Dashboard() {
                 <span>Clips are automatically cropped for social media.</span>
               </li>
             </ul>
+
+            <AdBanner
+              dataAdSlot="yyyyyyyyyy"
+              dataAdFormat="vertical"
+              className="mt-8 rounded-3xl border border-white/5 bg-white/5 p-4 min-h-[400px] flex items-center justify-center text-slate-500 text-xs"
+            />
           </section>
         </div>
 
