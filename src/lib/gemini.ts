@@ -107,8 +107,12 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
         console.log("Gemini Response:", responseText);
     } catch (e: any) {
         console.error("Gemini response was blocked:", e);
-        if (e.message?.includes("PROHIBITED_CONTENT") || e.message?.includes("SAFETY")) {
-            throw new Error("This video content was flagged by AI safety filters and cannot be processed.");
+        const errorMessage = e.message || String(e);
+        if (errorMessage.includes("PROHIBITED_CONTENT") ||
+            errorMessage.includes("SAFETY") ||
+            errorMessage.includes("OTHER") ||
+            errorMessage.includes("blocked")) {
+            throw new Error("This video content was flagged by AI safety filters or cannot be processed. Please try a different video or a shorter segment.");
         }
         throw e;
     }
