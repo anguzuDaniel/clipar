@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from 'fs';
 
@@ -63,7 +63,25 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
                     required: ["start", "end", "reason", "transcription"]
                 }
             }
-        }
+        },
+        safetySettings: [
+            {
+                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+        ],
     });
 
     const prompt = `
@@ -83,8 +101,17 @@ export async function analyzeVideoWithGemini(videoPath: string): Promise<VideoHi
         { text: prompt },
     ]);
 
-    const responseText = result.response.text();
-    console.log("Gemini Response:", responseText);
+    let responseText = "";
+    try {
+        responseText = result.response.text();
+        console.log("Gemini Response:", responseText);
+    } catch (e: any) {
+        console.error("Gemini response was blocked:", e);
+        if (e.message?.includes("PROHIBITED_CONTENT") || e.message?.includes("SAFETY")) {
+            throw new Error("This video content was flagged by AI safety filters and cannot be processed.");
+        }
+        throw e;
+    }
 
     try {
         // With responseSchema, the output should already be valid JSON
