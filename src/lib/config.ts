@@ -4,14 +4,23 @@ import ffmpegStatic from 'ffmpeg-static';
 const getFfmpegPath = () => {
   if (!ffmpegStatic) return null;
 
-  // Handle Next.js/Turbopack \ROOT placeholder
   let cleanPath = ffmpegStatic;
+
+  // Handle Next.js/Turbopack \ROOT placeholder
   if (cleanPath.startsWith('\\ROOT')) {
     cleanPath = cleanPath.replace('\\ROOT', '');
   }
 
-  // Resolve to absolute path
-  return path.isAbsolute(cleanPath) ? cleanPath : path.join(process.cwd(), cleanPath);
+  // On Windows, if the path starts with a backslash but not a drive letter,
+  // it's relative to the drive root. We want it relative to process.cwd().
+  if (cleanPath.startsWith('\\') && !cleanPath.startsWith('\\\\') && !/^[a-zA-Z]:/.test(cleanPath)) {
+    cleanPath = path.join(process.cwd(), cleanPath);
+  }
+
+  // Final resolution
+  const resolvedPath = path.isAbsolute(cleanPath) ? cleanPath : path.join(process.cwd(), cleanPath);
+  console.log(`Resolved FFmpeg Path: ${resolvedPath}`);
+  return resolvedPath;
 };
 
 export const CONFIG = {
