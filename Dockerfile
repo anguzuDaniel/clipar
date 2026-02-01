@@ -8,7 +8,6 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libc6-compat \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
@@ -24,7 +23,6 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libc6-compat \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies from deps stage
@@ -42,7 +40,6 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libc6-compat \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
