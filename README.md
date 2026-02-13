@@ -1,72 +1,97 @@
-🎬 Clipar: AI-Powered Social Media Clipping Tool
-Clipar is a high-performance web application designed to transform long-form video content (YouTube links or local uploads) into viral-ready clips for TikTok, Instagram Reels, and YouTube Shorts.
+Here is the professional **README.md** file in Markdown format. You can copy this entire block and paste it directly into your project files using **github.dev** or your mobile code editor.
 
-By leveraging Gemini 1.5 Pro/Flash for video intelligence and FFmpeg/Remotion for precise rendering, Clipar automates the tedious parts of content creation.
+---
 
-🚀 Features
-Smart Viral Detection: Uses AI to "watch" your video and identify the most engaging moments based on speech and action.
+# # 🎬 Clipar
 
-Auto-Reframe (9:16): Intelligent cropping of horizontal videos into the vertical format required for mobile platforms.
+### AI-Powered Social Media Video Repurposing
 
-Viral Captions: Automatically generates high-contrast, "Hormozi-style" captions that stay within the social media "safe zones."
+**Clipar** is a full-stack SaaS platform designed to help creators turn long-form videos into viral short-form content for **TikTok, Instagram Reels, and YouTube Shorts**.
 
-Dual Input: Support for direct MP4 uploads or instant processing via YouTube URL.
+---
 
-One-Click Export: Fast server-side rendering with direct download links.
+## ## 🚀 Features
 
-🛠️ Tech Stack
-Frontend: Next.js 14 (App Router), Tailwind CSS
+* **AI Viral Extraction:** Uses **Gemini 1.5 Flash** to analyze video content and identify the most engaging highlights.
+* **Auto-Reframing:** Automatically converts horizontal (16:9) video into vertical (9:16) masterpieces.
+* **Dynamic Captions:** Burned-in, high-contrast captions (Hormozi-style) that stay within social media "safe zones."
+* **Multi-Source Input:** Paste a **YouTube link** or **Upload** an MP4 file directly.
+* **Fast Export:** Optimized FFmpeg rendering for quick downloads.
 
-Backend: Node.js, FFmpeg for video manipulation
+---
 
-AI Engine: Google Gemini 1.5 Flash (Multimodal Video Analysis)
+## ## 🛠️ Tech Stack
 
-Deployment: Google Cloud Run (Containerized via Docker)
+| Component | Technology |
+| --- | --- |
+| **Framework** | Next.js 14 (App Router) |
+| **Styling** | Tailwind CSS |
+| **Video Engine** | FFmpeg / Remotion |
+| **Intelligence** | Google Gemini API (Multimodal) |
+| **Deployment** | Google Cloud Run (Docker) |
+| **Monetization** | Google AdSense |
 
-Video Framework: Remotion
+---
 
-📂 Project Structure
-Plaintext
-├── app/                # Next.js App Router (UI Components)
-├── public/             # Static assets (Logo, Fonts)
-├── utils/
-│   ├── gemini.ts       # AI Analysis logic
-│   └── processor.ts    # FFmpeg/Remotion rendering logic
-├── components/         # Reusable UI (Video Player, AdBanners)
-├── Dockerfile          # Configuration for Google Cloud deployment
-└── .env.example        # Environment variable template
-⚙️ Getting Started
-Prerequisites
-Node.js 18+
+## ## 📂 Project Structure
 
-FFmpeg installed on your local machine
+```text
+├── app/               # Next.js Pages & Layouts
+├── components/        # UI Components (Upload, Player, AdBanners)
+├── public/            # Static Assets (Logo, Fonts)
+├── utils/             # Core Logic
+│   ├── gemini.ts      # AI Video Analysis
+│   └── processor.ts   # FFmpeg Rendering Logic
+├── Dockerfile         # Deployment Configuration
+└── README.md          # Project Documentation
 
-A Google AI Studio API Key
+```
 
-Installation
-Clone the repository:
+---
 
-Bash
-git clone https://github.com/your-username/clipar.git
-cd clipar
-Install dependencies:
+## ## ⚙️ Installation & Setup
 
-Bash
-npm install
-Set up environment variables:
-Create a .env.local file and add:
+1. **Clone the repo**
+```bash
+git clone https://github.com/Kenyiy/clipar.git
 
-Code snippet
-NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
-NEXT_PUBLIC_ADSENSE_CLIENT_ID=your_adsense_id
-Run the development server:
+```
 
-Bash
+
+2. **Configure Environment Variables**
+Create a `.env.local` file:
+```env
+NEXT_PUBLIC_GEMINI_API_KEY=your_key
+NEXT_PUBLIC_ADSENSE_CLIENT_ID=ca-pub-xxxxxxxx
+
+```
+
+
+3. **Run Development Server**
+```bash
 npm run dev
-🚢 Deployment
-This project is optimized for Google Cloud Run. To deploy, ensure you have the Google Cloud CLI installed and run:
 
-Bash
-gcloud run deploy clipar --source . --region europe-west1
-⚖️ License
-Distributed under the MIT License. See LICENSE for more information.
+```
+
+
+
+---
+
+## ## 🚢 Deployment
+
+Clipar is containerized and ready for **Google Cloud Run**. To deploy to the `europe-west1` region:
+
+```bash
+gcloud run deploy clipar --source . --region europe-west1 --allow-unauthenticated
+
+```
+
+---
+
+## ## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+**Would you like me to create the `LICENSE` file text or a `Privacy Policy` to go along with this?**
