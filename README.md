@@ -1,7 +1,3 @@
-Here is the professional **README.md** file in Markdown format. You can copy this entire block and paste it directly into your project files using **github.dev** or your mobile code editor.
-
----
-
 # # 🎬 Clipar
 
 ### AI-Powered Social Media Video Repurposing
